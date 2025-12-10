@@ -1,0 +1,8 @@
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-Ctarget-feature=+crt-static"]
+
+[alias]
+dev = "run --features bevy/dynamic_linking"
+release = "run --release"
+buildd = "build --features bevy/dynamic_linking"
+buildr = "build --release"
