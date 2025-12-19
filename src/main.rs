@@ -1,17 +1,19 @@
+mod algorithms;
 mod ball;
 mod experiment;
 mod profiler;
 
-use std::f32::consts::PI;
-use std::time::Duration;
 use rand::prelude::*;
 use rand::rng;
+use std::f32::consts::PI;
+use std::time::Duration;
 
-use bevy::prelude::*;
-use bevy::math::ops::*;
 use bevy::color::palettes::basic::*;
+use bevy::math::ops::*;
+use bevy::prelude::*;
 use clap::Parser;
 
+use crate::algorithms::merge_sort_naive;
 use ball::*;
 use experiment::*;
 use profiler::*;
@@ -22,6 +24,9 @@ struct Args {
     /// Print step execution times and draw gizmos
     #[arg(short = 'D', long, default_value_t = true)]
     debug: bool,
+    /// The number of nearest balls that should be marked
+    #[arg(short, long, default_value_t = 20)]
+    pick: usize,
     /// The starting step size
     #[arg(short, long, default_value_t = 50)]
     first: usize,
@@ -43,6 +48,8 @@ fn main() {
     let args = Args::parse();
 
     App::new()
+        .insert_resource(ClearColor(Color::srgb(1., 1., 1.)))
+        .add_message::<MarkBallMessage>()
         .add_plugins(DefaultPlugins)
         .add_plugins(ProfilerPlugin)
         .add_plugins(ExperimentPlugin {
@@ -52,21 +59,30 @@ fn main() {
             step_duration: Duration::from_secs_f32(args.duration),
             min_calcs_per_step: args.min,
             variations: 4,
+            pick_number: args.pick,
             debug: args.debug,
         })
-        .add_systems(Startup, (
-            setup, add_ball,
-        ))
+        .add_systems(Startup, (setup, add_ball))
         .add_systems(
-            Update, (
-                clear_balls.run_if(on_message::<ExperimentProgress>).before(add_ball),
+            Update,
+            (
+                clear_balls
+                    .run_if(on_message::<ExperimentProgress>)
+                    .before(add_ball),
                 add_ball.run_if(on_message::<ExperimentProgress>),
                 move_balls,
+                sort_balls.after(move_balls),
+                color_marked_balls
+                    .run_if(on_message::<MarkBallMessage>)
+                    .after(sort_balls),
             ),
         )
         .add_systems(PostUpdate, process_experiment_progress)
         .run();
 }
+
+#[derive(Resource)]
+struct SortingTableIndex(usize);
 
 fn setup(
     mut commands: Commands,
@@ -74,23 +90,18 @@ fn setup(
     exp_params: Res<ExperimentParameters>,
 ) {
     commands.spawn(Camera2d);
-    // let algorithms: Vec<String> = vec![
-    //     "None".to_string(),
-    //     "PairDetection".to_string(),
-    //     "PairBoundingBox".to_string(),
-    //     "QuadTree".to_string()
-    // ];
-    // let samples = exp_params.relevant_samples();
-    //
-    // let index = profiler.create_table("Collision", algorithms, samples.clone());
-    // commands.insert_resource(CollisionTableIndex(index));
-    //
-    // let qt_index = profiler.create_table(
-    //     "Quad Tree",
-    //     vec!["Build time".to_string(), "Traversal time".to_string()],
-    //     samples.clone(),
-    // );
-    // commands.insert_resource(QuadTreeTableIndex(qt_index));
+
+    let index = profiler.create_table(
+        "Sorting",
+        vec![
+            "MergeSortNaive".to_string(),
+            "MergeSortLinear".to_string(),
+            "QuickSort".to_string(),
+            "QuickSortResort".to_string()
+        ],
+        exp_params.relevant_samples().clone()
+    );
+    commands.insert_resource(SortingTableIndex(index));
 }
 
 fn clear_balls(balls: Query<Entity, With<Ball>>, mut commands: Commands) {
@@ -148,24 +159,32 @@ fn add_ball(
     let random_y = miny + height * rng.random::<f32>();
     let random_speed = min_speed + (max_speed - min_speed) * rng.random::<f32>();
     let random_velocity = random_on_circle(&mut rng) * random_speed;
-    
+
     let special_ball = create_special_ball(
         radius,
         Color::from(BLACK),
         Transform::from_xyz(random_x, random_y, 0.),
         random_velocity,
-        &mut meshes, 
+        &mut meshes,
         &mut materials,
     );
-    
+
     commands.spawn(special_ball);
 }
 
 fn check_in_bounds(rect: Rect, pos: Vec2, radius: f32) -> usize {
-    if pos.x > rect.max.x - radius { return 1; }
-    if pos.y > rect.max.y - radius { return 2; }
-    if pos.x < rect.min.x + radius { return 3; }
-    if pos.y < rect.min.y + radius { return 4; }
+    if pos.x > rect.max.x - radius {
+        return 1;
+    }
+    if pos.y > rect.max.y - radius {
+        return 2;
+    }
+    if pos.x < rect.min.x + radius {
+        return 3;
+    }
+    if pos.y < rect.min.y + radius {
+        return 4;
+    }
     0
 }
 
@@ -181,13 +200,13 @@ fn move_balls(balls: Query<(&mut Transform, &mut Ball)>, window: Single<&Window>
             2 => ball.velocity = ball.velocity.reflect(Vec3::NEG_Y),
             3 => ball.velocity = ball.velocity.reflect(Vec3::X),
             4 => ball.velocity = ball.velocity.reflect(Vec3::Y),
-            _ => {},
+            _ => {}
         }
 
-
-        let r = Rect::from_center_half_size( // window size adjusted for ball radius
+        let r = Rect::from_center_half_size(
+            // window size adjusted for ball radius
             window_rect.center(),
-            window_rect.half_size() - ball.radius
+            window_rect.half_size() - ball.radius,
         );
         let max_3 = Vec3::new(r.max.x, r.max.y, 0.);
         let min_3 = Vec3::new(r.min.x, r.min.y, 0.);
@@ -196,6 +215,53 @@ fn move_balls(balls: Query<(&mut Transform, &mut Ball)>, window: Single<&Window>
     }
 }
 
+fn sort_balls(
+    balls: Query<(Entity, &Transform, &Ball)>,
+    special: Single<&Transform, With<Special>>,
+    exp_params: Res<ExperimentParameters>,
+    writer: MessageWriter<MarkBallMessage>,
+    mut profiler: ResMut<Profiler>,
+    table_index: Res<SortingTableIndex>
+) {
+    // 9 3687 9321
+
+    // todo: merge sort, memory efficient implementation
+    // todo: quick sort, random and resorting the last sorted list
+
+    let elapsed = match exp_params.variation_index {
+        _ => merge_sort_naive(balls, special, &exp_params, writer),
+    };
+
+    profiler.record_cell_data_by_table_row_col_index(
+        table_index.0,
+        exp_params.variation_index,
+        exp_params.sample_index,
+        elapsed,
+    );
+}
+
+#[derive(Message)]
+pub struct MarkBallMessage(Entity);
+
+fn color_marked_balls(
+    mut marked: MessageReader<MarkBallMessage>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    ball_materials: Query<&MeshMaterial2d<ColorMaterial>, Without<Special>>,
+) {
+    for ball_mat in ball_materials {
+        materials.get_mut(ball_mat).unwrap().color = Color::from(GRAY);
+    }
+
+    for e in marked.read() {
+        if let Ok(mat) = ball_materials.get(e.0) {
+            materials.get_mut(mat).unwrap().color = Color::from(BLACK);
+        }
+    }
+}
+
 fn process_experiment_progress(mut progress: MessageReader<ExperimentProgress>) {
-    progress.read();
+    for progress in progress.read() {
+        let (prev_size, prev_var, last) = (progress.0, progress.1, progress.2);
+        // todo: print experiment progress to console
+    }
 }

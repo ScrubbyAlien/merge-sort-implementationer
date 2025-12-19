@@ -7,7 +7,7 @@ pub struct Ball {
 }
 
 #[derive(Component)]
-struct Special;
+pub struct Special;
 
 #[derive(Bundle)]
 pub struct BallBundle {

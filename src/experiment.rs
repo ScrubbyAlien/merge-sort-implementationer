@@ -12,6 +12,7 @@ pub struct ExperimentPlugin {
     pub number_of_steps: usize,
     pub step_duration: Duration,
     pub min_calcs_per_step: usize,
+    pub pick_number: usize,
     pub debug: bool,
 }
 
@@ -25,6 +26,7 @@ impl Plugin for ExperimentPlugin {
             self.number_of_steps,
             self.step_duration,
             self.min_calcs_per_step,
+            self.pick_number,
             self.debug,
         ));
         app.add_systems(Update, progress_experiment);
@@ -44,6 +46,7 @@ pub struct ExperimentParameters {
     current_calcs: usize,
     pub variation_index: usize,
     pub number_variations: usize,
+    pub pick_number: usize,
     pub debug: bool,
 }
 
@@ -55,6 +58,7 @@ impl ExperimentParameters {
         number_samples: usize,
         sample_duration: Duration,
         min_calcs_per_sample: usize,
+        pick_number: usize,
         debug: bool,
     ) -> ExperimentParameters {
         let sample_sizes = generate_sample_sizes(first, step);
@@ -74,6 +78,7 @@ impl ExperimentParameters {
             current_sample_progress: Duration::from_secs(0),
             min_calcs_per_sample,
             current_calcs: 0,
+            pick_number,
             debug,
         }
     }
