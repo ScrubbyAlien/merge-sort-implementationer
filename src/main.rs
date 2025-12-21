@@ -72,12 +72,18 @@ fn main() {
                 add_ball.run_if(on_message::<ExperimentProgress>),
                 move_balls,
                 sort_balls.after(move_balls),
-                color_marked_balls
-                    .run_if(on_message::<MarkBallMessage>)
-                    .after(sort_balls),
+                color_marked_balls.after(sort_balls),
             ),
         )
-        .add_systems(PostUpdate, process_experiment_progress)
+        .add_systems(
+            PostUpdate,
+            (
+                process_experiment_progress,
+                write_to_csvs
+                    .run_if(on_message::<AppExit>)
+                    .after(process_experiment_progress),
+            ),
+        )
         .run();
 }
 
@@ -97,15 +103,14 @@ fn setup(
             "MergeSortNaive".to_string(),
             "MergeSortLinear".to_string(),
             "QuickSort".to_string(),
-            "QuickSortResort".to_string()
+            "QuickSortResort".to_string(),
         ],
-        exp_params.relevant_samples().clone()
+        exp_params.relevant_samples().clone(),
     );
     commands.insert_resource(SortingTableIndex(index));
 }
 
 fn clear_balls(balls: Query<Entity, With<Ball>>, mut commands: Commands) {
-    println!("{}", "clear");
     for ball in balls.iter() {
         commands.entity(ball).despawn();
     }
@@ -123,8 +128,6 @@ fn add_ball(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    println!("{}", "add");
-
     let size = exp_params.current_sample_size();
     let mut rng = rng();
     let radius = 15.;
@@ -216,19 +219,18 @@ fn move_balls(balls: Query<(&mut Transform, &mut Ball)>, window: Single<&Window>
 }
 
 fn sort_balls(
-    balls: Query<(Entity, &Transform, &Ball)>,
+    balls: Query<(Entity, &Transform, &Ball), Without<Special>>,
     special: Single<&Transform, With<Special>>,
     exp_params: Res<ExperimentParameters>,
     writer: MessageWriter<MarkBallMessage>,
     mut profiler: ResMut<Profiler>,
-    table_index: Res<SortingTableIndex>
+    table_index: Res<SortingTableIndex>,
 ) {
-    // 9 3687 9321
-
     // todo: merge sort, memory efficient implementation
     // todo: quick sort, random and resorting the last sorted list
 
     let elapsed = match exp_params.variation_index {
+        1 => 
         _ => merge_sort_naive(balls, special, &exp_params, writer),
     };
 
@@ -254,14 +256,23 @@ fn color_marked_balls(
 
     for e in marked.read() {
         if let Ok(mat) = ball_materials.get(e.0) {
-            materials.get_mut(mat).unwrap().color = Color::from(BLACK);
+            materials.get_mut(mat).unwrap().color = Color::from(RED);
         }
     }
 }
 
-fn process_experiment_progress(mut progress: MessageReader<ExperimentProgress>) {
+fn process_experiment_progress(
+    mut progress: MessageReader<ExperimentProgress>,
+    mut exit: MessageWriter<AppExit>,
+) {
     for progress in progress.read() {
-        let (prev_size, prev_var, last) = (progress.0, progress.1, progress.2);
-        // todo: print experiment progress to console
+        let (prev_size, prev_var, last_sample) = (progress.0, progress.1, progress.2);
+        if last_sample {
+            exit.write(AppExit::Success);
+        }
     }
+}
+
+fn write_to_csvs(profiler: Res<Profiler>) {
+    profiler.write_to_csv("Sorting", "sorting_times").unwrap();
 }

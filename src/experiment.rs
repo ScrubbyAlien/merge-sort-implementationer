@@ -123,7 +123,7 @@ fn generate_sample_sizes(first: usize, step: usize) -> [usize; 100] {
 
 /// * `0`: previous sample size index
 /// * `1`: previous variation index
-/// * `2`: last sample
+/// * `2`: is last sample for experiment
 #[derive(Message)]
 pub struct ExperimentProgress(pub usize, pub usize, pub bool);
 
