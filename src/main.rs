@@ -13,7 +13,7 @@ use bevy::math::ops::*;
 use bevy::prelude::*;
 use clap::Parser;
 
-use crate::algorithms::merge_sort_naive;
+use crate::algorithms::{merge_sort_memory, merge_sort_naive};
 use ball::*;
 use experiment::*;
 use profiler::*;
@@ -101,7 +101,7 @@ fn setup(
         "Sorting",
         vec![
             "MergeSortNaive".to_string(),
-            "MergeSortLinear".to_string(),
+            "MergeSortMemory".to_string(),
             "QuickSort".to_string(),
             "QuickSortResort".to_string(),
         ],
@@ -150,7 +150,8 @@ fn add_ball(
             radius,
             Color::from(GRAY),
             Transform::from_xyz(random_x, random_y, 0.),
-            random_velocity,
+            // random_velocity,
+            Vec2::ZERO,
             &mut meshes,
             &mut materials,
         ));
@@ -230,7 +231,7 @@ fn sort_balls(
     // todo: quick sort, random and resorting the last sorted list
 
     let elapsed = match exp_params.variation_index {
-        1 => 
+        1 => merge_sort_memory(balls, special, &exp_params, writer),
         _ => merge_sort_naive(balls, special, &exp_params, writer),
     };
 
