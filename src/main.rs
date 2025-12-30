@@ -13,7 +13,7 @@ use bevy::math::ops::*;
 use bevy::prelude::*;
 use clap::Parser;
 
-use crate::algorithms::{merge_sort_memory, merge_sort_naive};
+use crate::algorithms::{bottom_up, memory_efficient, top_down};
 use ball::*;
 use experiment::*;
 use profiler::*;
@@ -58,7 +58,7 @@ fn main() {
             number_of_steps: args.number,
             step_duration: Duration::from_secs_f32(args.duration),
             min_calcs_per_step: args.min,
-            variations: 4,
+            variations: 3,
             pick_number: args.pick,
             debug: args.debug,
         })
@@ -98,12 +98,11 @@ fn setup(
     commands.spawn(Camera2d);
 
     let index = profiler.create_table(
-        "Sorting",
+        "Merge Sort implementations",
         vec![
-            "MergeSortNaive".to_string(),
-            "MergeSortMemory".to_string(),
-            "QuickSort".to_string(),
-            "QuickSortResort".to_string(),
+            "MemoryEfficient".to_string(),
+            "TopDown".to_string(),
+            "BottomUp".to_string(),
         ],
         exp_params.relevant_samples().clone(),
     );
@@ -231,8 +230,9 @@ fn sort_balls(
     // todo: quick sort, random and resorting the last sorted list
 
     let elapsed = match exp_params.variation_index {
-        1 => merge_sort_memory(balls, special, &exp_params, writer),
-        _ => merge_sort_naive(balls, special, &exp_params, writer),
+        1 => top_down(balls, special, &exp_params, writer),
+        2 => bottom_up(balls, special, &exp_params, writer),
+        _ => memory_efficient(balls, special, &exp_params, writer),
     };
 
     profiler.record_cell_data_by_table_row_col_index(
@@ -275,5 +275,5 @@ fn process_experiment_progress(
 }
 
 fn write_to_csvs(profiler: Res<Profiler>) {
-    profiler.write_to_csv("Sorting", "sorting_times").unwrap();
+    profiler.write_to_csv("Merge Sort implementations", "sorting_times").unwrap();
 }
