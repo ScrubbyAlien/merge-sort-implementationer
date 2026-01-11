@@ -130,8 +130,8 @@ fn add_ball(
     let size = exp_params.current_sample_size();
     let mut rng = rng();
     let radius = 15.;
-    let min_speed = 100.;
-    let max_speed = 300.;
+    let min_speed = 50.;
+    let max_speed = 100.;
     let height = window.height() - radius * 2.;
     let width = window.width() - radius * 2.;
     let miny = radius - window.height() / 2.;
@@ -149,8 +149,8 @@ fn add_ball(
             radius,
             Color::from(GRAY),
             Transform::from_xyz(random_x, random_y, 0.),
-            // random_velocity,
-            Vec2::ZERO,
+            random_velocity,
+            // Vec2::ZERO,
             &mut meshes,
             &mut materials,
         ));
@@ -161,7 +161,7 @@ fn add_ball(
     let random_x = minx + width * rng.random::<f32>();
     let random_y = miny + height * rng.random::<f32>();
     let random_speed = min_speed + (max_speed - min_speed) * rng.random::<f32>();
-    let random_velocity = random_on_circle(&mut rng) * random_speed;
+    let random_velocity = random_on_circle(&mut rng) * random_speed * 3.;
 
     let special_ball = create_special_ball(
         radius,
@@ -267,8 +267,8 @@ fn process_experiment_progress(
     mut exit: MessageWriter<AppExit>,
 ) {
     for progress in progress.read() {
-        let (prev_size, prev_var, last_sample) = (progress.0, progress.1, progress.2);
-        if last_sample {
+        // let (prev_size, prev_var, last_sample) = (progress.0, progress.1, progress.2);
+        if progress.2 {
             exit.write(AppExit::Success);
         }
     }

@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use std::cmp::min;
 use std::collections::VecDeque;
 use std::time::Instant;
+use bevy::render::render_resource::encase::private::RuntimeSizedArray;
 
 struct BallData {
     entity: Entity,
@@ -137,8 +138,10 @@ pub fn bottom_up(
         });
     }
 
+    let mut temp: Vec<BallData> = allocate_vec_with_placeholders(ball_list.len());
+
     let start = Instant::now();
-    merge_bottom(&mut ball_list);
+    merge_bottom(&mut ball_list, &mut temp);
     let elapsed = start.elapsed().as_nanos();
 
     for i in 0..exp_params.pick_number {
@@ -148,13 +151,11 @@ pub fn bottom_up(
     elapsed
 }
 
-fn merge_bottom(unsorted: &mut [BallData]) {
+fn merge_bottom(unsorted: &mut [BallData], mut temp: &mut [BallData]) {
     let length = unsorted.len();
 
     let mut run_size = 2;
     let mut run_start_index = 0;
-    let mut temp: Vec<BallData> = allocate_vec_with_placeholders(length);
-
 
     while run_size <= length {
         while run_start_index < length {
