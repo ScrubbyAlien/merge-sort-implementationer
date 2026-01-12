@@ -274,6 +274,10 @@ fn process_experiment_progress(
     }
 }
 
-fn write_to_csvs(profiler: Res<Profiler>) {
+fn write_to_csvs(profiler: Res<Profiler>, startup_instant: Res<StartupInstant>) {
     profiler.write_to_csv("Merge Sort implementations", "sorting_times").unwrap();
+    let time = startup_instant.0.elapsed().as_secs();
+    let secs = time % 60;
+    let mins = time / 60;
+    println!("finished: {mins} minutes {secs} seconds");
 }
